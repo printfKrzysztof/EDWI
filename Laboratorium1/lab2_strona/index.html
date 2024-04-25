@@ -1,0 +1,159 @@
+<!doctype html>
+<!--
+ @license
+ Copyright 2019 Google LLC. All Rights Reserved.
+ SPDX-License-Identifier: Apache-2.0
+-->
+<html>
+
+<head>
+  <title>Kody pocztowe</title>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=default"></script>
+
+  <link rel="stylesheet" type="text/css" href="./style.css" />
+  <script type="module" src="./index.ts"></script>
+</head>
+
+<body>
+  <input type="file" accept='text/plain' onChange="openfile(event)" />
+  <div id="map"></div>
+  <div id="output"></div>
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartNGg&callback=initMap&v=weekly"
+    defer></script>
+  <script>
+    let cords = [50, 50, 20, 20];
+    let zipCodes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    var map = null;
+    let entire_sum = 0;
+    let max_val = 0;
+    function openfile(event) {
+      var input = event.target;
+
+      var reader = new FileReader();
+      reader.onload = function () {
+        var text = reader.result;
+        var node = document.getElementById('output');
+
+        cords = text.split("\n")[0].split(" ").map(Number);
+        text = text.substring(text.indexOf("\n") + 1);
+        node.innerText = text;
+
+        sumZipCodes(text);
+
+        for (let i = 0; i < zipCodes.length; i++) {
+          entire_sum += zipCodes[i];
+          if (zipCodes[i] > max_val) {
+            max_val = zipCodes[i];
+          }
+        }
+        loadMap();
+      };
+      reader.readAsText(input.files[0]);
+    }
+
+    function sumZipCodes(text) {
+      const zipList = text.split("\n");
+
+      for (let i = 0; i < zipList.length; i++) {
+
+        zipCodes[zipList[i].split(" ")[0] - 1]++;
+      }
+
+      console.log(zipCodes);
+    }
+
+    function loadMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 11,
+        center: { lat: (cords[0] + cords[1]) / 2, lng: (cords[2] + cords[3]) / 2 },
+        mapTypeId: "terrain",
+      });
+
+      drawRectangles();
+    }
+
+    function getGradientColor(value) {
+      // Convert percentage to a hue value between 120 (green) and 0 or 360 (red)
+      let hue = ((1 - value) * 120);
+
+      // Convert hue value to RGB color format
+      let [r, g, b] = hslToRgb(hue / 360, 1, 0.5);
+
+      // Convert RGB color to hexadecimal format
+      let hexColor = rgbToHex(r, g, b);
+
+      return "#" + hexColor;
+
+    }
+
+    // Function to convert HSL to RGB color format
+    function hslToRgb(h, s, l) {
+      let r, g, b;
+
+      if (s == 0) {
+        r = g = b = l; // achromatic
+      } else {
+        function hue2rgb(p, q, t) {
+          if (t < 0) t += 1;
+          if (t > 1) t -= 1;
+          if (t < 1 / 6) return p + (q - p) * 6 * t;
+          if (t < 1 / 2) return q;
+          if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+          return p;
+        }
+
+        let q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        let p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1 / 3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1 / 3);
+      }
+
+      return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+    }
+
+    // Function to convert RGB to hexadecimal color format
+    function rgbToHex(r, g, b) {
+      return ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+    }
+
+    function drawRectangles() {
+      height = (cords[1] - cords[0]) / 4;
+      width = (cords[3] - cords[2]) / 4;
+
+      let rectangles = [];
+      for (let i = 0; i < 16; i++) {
+        rectangles[i] = new google.maps.Rectangle({
+          strokeColor: "0x000000",
+          strokeOpacity: 0.5,
+          strokeWeight: 2,
+          fillColor: getGradientColor(zipCodes[i] / max_val),
+          fillOpacity: 0.2,
+          map,
+          bounds: {
+            north: cords[1] - height * Math.floor(i / 4),
+            south: cords[1] - height * (Math.floor(i / 4) + 1),
+            east: cords[2] + width * (i % 4 + 1),
+            west: cords[2] + width * (i % 4),
+          },
+        });
+
+        google.maps.event.addListener(rectangles[i], 'click', (function (index) {
+          return function (event) {
+            let message = "Sektor " + (index + 1) + ", Liczba kodów: " + zipCodes[index] + ", Procentowo: " + 100 * (zipCodes[index] / entire_sum);
+            let infowindow = new google.maps.InfoWindow({
+              content: message
+            });
+            infowindow.setPosition(event.latLng);
+            infowindow.open(map);
+          };
+        })(i));
+
+      }
+    }
+
+  </script>
+</body>
+
+</html>
